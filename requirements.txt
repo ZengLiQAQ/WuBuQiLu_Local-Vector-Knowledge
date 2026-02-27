@@ -21,3 +21,5 @@ httpx
 pyyaml
 loguru
 beautifulsoup4
+jieba
+rank-bm25

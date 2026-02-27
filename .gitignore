@@ -1,0 +1,36 @@
+# Dependencies
+web/node_modules/
+web/.next/
+web/out/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+*.db
+tags.db
+
+# Logs
+*.log
+kb_logs.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local data
+local_vector_db/
+temp_uploads/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OMC
+.omc/

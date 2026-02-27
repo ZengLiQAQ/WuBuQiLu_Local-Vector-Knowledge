@@ -19,6 +19,7 @@ from bs4 import BeautifulSoup
 import chromadb
 from chromadb.config import Settings
 from sentence_transformers import SentenceTransformer
+from bm25_search import BM25Searcher
 
 
 # ========== 全局配置加载 ==========
@@ -101,7 +102,11 @@ class LocalVectorKB:
         # 3. 加载嵌入模型（MPS加速+量化）
         self._init_embed_model()
 
-        # 4. 文件解析器映射
+        # 4. 初始化 BM25 搜索器
+        self.bm25_searcher = BM25Searcher()
+        self._build_bm25_index()
+
+        # 5. 文件解析器映射
         self.file_parser_map = {
             ".pdf": self._parse_pdf,
             ".md": self._parse_md,
@@ -158,6 +163,25 @@ class LocalVectorKB:
             self.embed_model = SentenceTransformer("BAAI/bge-small-zh-v1.5", device=device)
             self.encode_kwargs = {"normalize_embeddings": True, "batch_size": 32, "show_progress_bar": False}
             logger.warning("降级到bge-small-zh-v1.5模型运行")
+
+    def _build_bm25_index(self):
+        """构建 BM25 索引"""
+        try:
+            # 获取所有文档
+            all_docs = self.collection.get()
+            if all_docs["documents"]:
+                documents = [
+                    {"id": all_docs["ids"][i], "text": all_docs["documents"][i]}
+                    for i in range(len(all_docs["documents"]))
+                ]
+                self.bm25_searcher.build_index(documents)
+                logger.info(f"BM25 索引构建完成，共 {len(documents)} 篇文档")
+        except Exception as e:
+            logger.error(f"构建 BM25 索引失败：{e}")
+
+    def rebuild_bm25_index(self):
+        """重建 BM25 索引"""
+        self._build_bm25_index()
 
     # ========== 私有方法：文件解析 ==========
     def _validate_file(self, file_path):
@@ -457,6 +481,9 @@ class LocalVectorKB:
             # ChromaDB 新版本自动持久化
 
             logger.info(f"文件入库成功：{file_path}，分块数：{len(chunks)}")
+            # 重建 BM25 索引
+            if len(chunks) > 0:
+                self.rebuild_bm25_index()
             return len(chunks)
         except Exception as e:
             logger.error(f"文件入库失败：{file_path}，错误：{e}")
@@ -470,16 +497,20 @@ class LocalVectorKB:
                 total_chunks += self.add_file(file_path)
             else:
                 logger.warning(f"文件不存在：{file_path}")
+        # 重建 BM25 索引
+        if total_chunks > 0:
+            self.rebuild_bm25_index()
         logger.info(f"批量入库完成，总块数：{total_chunks}")
         return total_chunks
 
-    def search(self, query, top_k=5, file_type_filter=None, hybrid=True):
+    def search(self, query, top_k=5, file_type_filter=None, hybrid=True, use_bm25=True):
         """
-        混合检索（向量+关键词）
+        混合检索（向量 + BM25）
         :param query: 查询文本
         :param top_k: 返回条数
         :param file_type_filter: 文件类型过滤
         :param hybrid: 是否开启混合检索
+        :param use_bm25: 是否使用 BM25
         :return: 格式化结果
         """
         try:
@@ -490,51 +521,92 @@ class LocalVectorKB:
 
             # 2. 向量检索
             query_embedding = self.embed_model.encode([query], **self.encode_kwargs).tolist()
-            results = self.collection.query(
+            vector_results = self.collection.query(
                 query_embeddings=query_embedding,
                 n_results=top_k * 2 if hybrid else top_k,
                 where=where
             )
 
-            if not results["ids"][0]:
+            if not vector_results["ids"][0]:
                 return []
 
-            # 3. 混合检索优化
+            # 3. BM25 检索（如果启用）
+            bm25_scores = {}
+            if use_bm25 and hybrid:
+                bm25_results = self.bm25_searcher.search(query, top_k * 2)
+                bm25_scores = {doc_id: score for doc_id, score in bm25_results}
+
+            # 4. 构建结果并计算综合得分
             query_words = [w for w in query.strip().split() if len(w) > 1]
             formatted_results = []
 
-            for i in range(len(results["ids"][0])):
-                text = results["documents"][0][i]
-                distance = results["distances"][0][i]
-                metadata = results["metadatas"][0][i]
+            # 向量权重和 BM25 权重
+            vector_weight = 0.6
+            bm25_weight = 0.4
+
+            # 获取向量检索结果
+            vector_dict = {}
+            for i in range(len(vector_results["ids"][0])):
+                doc_id = vector_results["ids"][0][i]
+                vector_dict[doc_id] = {
+                    "text": vector_results["documents"][0][i],
+                    "distance": vector_results["distances"][0][i],
+                    "metadata": vector_results["metadatas"][0][i]
+                }
+
+            # 合并向量和 BM25 结果
+            all_doc_ids = set(vector_dict.keys()) | set(bm25_scores.keys())
+
+            for doc_id in all_doc_ids:
+                if doc_id not in vector_dict:
+                    continue
+
+                doc_data = vector_dict[doc_id]
+                text = doc_data["text"]
+                distance = doc_data["distance"]
+                metadata = doc_data["metadata"]
+
+                # 向量得分
+                vector_score = 1 / (1 + distance)
+
+                # BM25 得分（归一化）
+                bm25_score = 0.0
+                if doc_id in bm25_scores:
+                    max_bm25 = max(bm25_scores.values()) if bm25_scores else 1
+                    bm25_score = bm25_scores[doc_id] / max_bm25 if max_bm25 > 0 else 0
 
                 # 关键词匹配度
                 match_count = sum([1 for w in query_words if w in text]) if query_words else 0
                 match_score = match_count / len(query_words) if query_words else 0
 
-                # 综合得分（向量相似度*0.7 + 关键词匹配度*0.3）
-                vector_score = 1 / (1 + distance)  # 距离转相似度（越小越相似）
-                total_score = vector_score * 0.7 + match_score * 0.3
+                # 综合得分
+                if hybrid and use_bm25:
+                    total_score = vector_score * vector_weight + bm25_score * bm25_weight
+                elif hybrid:
+                    total_score = vector_score * 0.7 + match_score * 0.3
+                else:
+                    total_score = vector_score
 
                 # 关键词高亮
                 highlighted_text = text
                 for word in query_words:
                     if len(word) > 1:
-                        highlighted_text = re.sub(f"({word})", r"<mark>\1</mark>", highlighted_text)
+                        highlighted_text = re.sub(f"({word})", r"<mark>\1</mark>", highlighted_text, flags=re.IGNORECASE)
 
                 formatted_results.append({
-                    "id": results["ids"][0][i],
+                    "id": doc_id,
                     "text": text,
                     "highlighted_text": highlighted_text,
                     "similarity_distance": round(distance, 4),
+                    "vector_score": round(vector_score, 4),
+                    "bm25_score": round(bm25_score, 4),
                     "match_score": round(match_score, 4),
                     "total_score": round(total_score, 4),
                     "metadata": metadata
                 })
 
             # 按综合得分排序
-            if hybrid:
-                formatted_results = sorted(formatted_results, key=lambda x: x["total_score"], reverse=True)[:top_k]
+            formatted_results = sorted(formatted_results, key=lambda x: x["total_score"], reverse=True)[:top_k]
 
             logger.info(f"检索完成：{query}，返回{len(formatted_results)}条结果")
             return formatted_results

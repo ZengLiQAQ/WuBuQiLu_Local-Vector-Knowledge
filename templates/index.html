@@ -615,8 +615,8 @@
 
         <!-- 导航标签页 -->
         <div class="nav-tabs">
-            <button class="nav-tab active" data-tab="knowledge"><i class="fas fa-folder"></i> 知识库管理</button>
-            <button class="nav-tab" data-tab="training"><i class="fas fa-brain"></i> 模型训练</button>
+            <button class="nav-tab active" data-tab="knowledge" onclick="switchTab('knowledge')"><i class="fas fa-folder"></i> 知识库管理</button>
+            <button class="nav-tab" data-tab="training" onclick="switchTab('training')"><i class="fas fa-brain"></i> 模型训练</button>
         </div>
         <!-- 知识库管理内容 -->
         <div id="tab-knowledge" class="tab-content active">
@@ -741,6 +741,7 @@
             <h2><i class="fas fa-exclamation-triangle"></i> 知识库操作（谨慎使用）</h2>
             <button id="clearBtn" class="danger">清空整个知识库</button>
         </div>
+        </div><!-- 关闭 tab-knowledge -->
 
         <!-- 模型训练内容 -->
         <div id="tab-training" class="tab-content">
@@ -1180,8 +1181,7 @@
                     chart.resize();
                 });
             } catch (err) {
-                console.error('加载统计图表失败：' + err.message);
-            }
+                }
         }
 
         // 页面加载完成后初始化图表
@@ -1190,9 +1190,25 @@
         });
 
         // ========== 标签页导航 ==========
+        function switchTab(tabId) {
+            );
+            ?.innerHTML?.substring(0, 100));
+            // 移除所有活动状态
+            document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            // 激活当前标签页
+            const targetTab = document.querySelector('.nav-tab[data-tab="' + tabId + '"]');
+            if (targetTab) targetTab.classList.add('active');
+
+            const targetContent = document.getElementById('tab-' + tabId);
+            if (targetContent) targetContent.classList.add('active');
+            }
+
         const navTabs = document.querySelectorAll('.nav-tab');
         navTabs.forEach(tab => {
             tab.addEventListener('click', () => {
+                );
                 // 移除所有活动状态
                 navTabs.forEach(t => t.classList.remove('active'));
                 document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -1266,8 +1282,7 @@
                     select.innerHTML = '<option value="">暂无数据</option>';
                 }
             } catch (err) {
-                console.error('加载数据列表失败：' + err.message);
-            }
+                }
         }
 
         // 数据清洗
@@ -1428,8 +1443,7 @@
                     listDiv.innerHTML = '<p style="padding: 20px; text-align: center; color: #666;">暂无已训练模型</p>';
                 }
             } catch (err) {
-                console.error('加载模型列表失败：' + err.message);
-            }
+                }
         }
 
         document.getElementById('refreshModelsBtn').addEventListener('click', refreshModelList);

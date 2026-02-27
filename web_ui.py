@@ -28,14 +28,91 @@ def safe_filename(filename: str) -> str:
     return os.path.basename(filename)
 
 from LocalVectorKB import LocalVectorKB, load_config
+from tag_db import TagDatabase
 
 
 # ========== 初始化配置 ==========
 CONFIG = load_config()
 API_VERSION = "v1"
-API_KEY = CONFIG["web"].get("api_key", "local_kb_2026_secure_key")
+
+# API Key 配置（支持管理员和只读权限）
+WEB_CONFIG = CONFIG.get("web", {})
+API_KEY = WEB_CONFIG.get("api_key", "local_kb_2026_secure_key")
+READONLY_KEY = WEB_CONFIG.get("readonly_key", "")  # 可选的只读 Key
 TEMP_DIR = "./temp_uploads"
 os.makedirs(TEMP_DIR, exist_ok=True)
+
+# ========== 权限系统 ==========
+class Permission:
+    """权限级别"""
+    NONE = "none"
+    READONLY = "readonly"
+    ADMIN = "admin"
+
+def get_api_key_role(api_key: str = None) -> str:
+    """获取 API Key 对应的权限角色"""
+    if not api_key:
+        return Permission.NONE
+    if api_key == API_KEY:
+        return Permission.ADMIN
+    if READONLY_KEY and api_key == READONLY_KEY:
+        return Permission.READONLY
+    return Permission.NONE
+
+def require_permission(action: str):
+    """权限检查装饰器工厂"""
+    # 定义操作所需的权限级别
+    PERMISSION_MAP = {
+        # 只读操作
+        "search": Permission.READONLY,
+        "stats": Permission.READONLY,
+        "tags_list": Permission.READONLY,
+        "tags_documents": Permission.READONLY,
+        "document_tags": Permission.READONLY,
+        "export": Permission.READONLY,
+        "task_status": Permission.READONLY,
+        "train_status": Permission.READONLY,
+        "train_models": Permission.READONLY,
+        "train_config": Permission.READONLY,
+        "train_data": Permission.READONLY,
+
+        # 管理员操作
+        "upload": Permission.ADMIN,
+        "delete": Permission.ADMIN,
+        "batch_delete": Permission.ADMIN,
+        "clear": Permission.ADMIN,
+        "tags_create": Permission.ADMIN,
+        "tags_update": Permission.ADMIN,
+        "tags_delete": Permission.ADMIN,
+        "document_add_tag": Permission.ADMIN,
+        "document_remove_tag": Permission.ADMIN,
+        "import": Permission.ADMIN,
+        "train_start": Permission.ADMIN,
+        "train_stop": Permission.ADMIN,
+        "train_clean": Permission.ADMIN,
+        "train_deploy": Permission.ADMIN,
+        "train_validate": Permission.ADMIN,
+    }
+
+    required_level = PERMISSION_MAP.get(action, Permission.ADMIN)
+
+    async def dependency(api_key: str = Depends(get_api_key)):
+        role = get_api_key_role(api_key)
+
+        # 管理员拥有所有权限
+        if role == Permission.ADMIN:
+            return api_key
+
+        # 检查权限级别
+        if required_level == Permission.READONLY and role == Permission.READONLY:
+            return api_key
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"权限不足，需要 {required_level} 权限"
+        )
+
+    return dependency
 
 # ========== 模型训练配置 ==========
 MODEL_TRAIN_BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model_train")
@@ -88,15 +165,25 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # API Key鉴权
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 async def get_api_key(api_key_header: str = Depends(api_key_header)):
-    if api_key_header != API_KEY:
+    """验证 API Key（支持管理员和只读 Key）"""
+    if not api_key_header:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="无效的API Key"
+            detail="缺少 API Key"
+        )
+    role = get_api_key_role(api_key_header)
+    if role == Permission.NONE:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="无效的 API Key"
         )
     return api_key_header
 
 # 初始化知识库
 kb = LocalVectorKB()
+
+# 标签数据库
+tag_db = TagDatabase(db_path="./tags.db")
 
 # 全局任务字典
 tasks = {}
@@ -323,7 +410,7 @@ async def clear_all(
 @limiter.limit("30/minute")
 async def get_stats(
     request: Request,
-    api_key: str = Depends(get_api_key)
+    api_key: str = Depends(require_permission("stats"))
 ):
     """获取统计信息"""
     try:
@@ -332,6 +419,332 @@ async def get_stats(
     except Exception as e:
         logger.error(f"获取统计信息失败：{e}")
         return ResponseModel.error(message=f"获取统计信息失败：{str(e)}")
+
+
+# ========== 标签管理 API ==========
+
+@app.get(f"/api/{API_VERSION}/tags")
+@limiter.limit("30/minute")
+async def get_tags(request: Request, api_key: str = Depends(get_api_key)):
+    """获取标签列表"""
+    try:
+        tags = tag_db.get_all_tags()
+        return ResponseModel.success(data=tags, message="获取标签列表成功")
+    except Exception as e:
+        logger.error(f"获取标签列表失败：{e}")
+        return ResponseModel.error(message=f"获取标签列表失败：{str(e)}")
+
+
+@app.post(f"/api/{API_VERSION}/tags")
+@limiter.limit("30/minute")
+async def create_tag(request: Request, api_key: str = Depends(get_api_key)):
+    """创建标签"""
+    try:
+        data = await request.json()
+        name = data.get('name')
+        color = data.get('color', '#0071e3')
+
+        if not name:
+            return ResponseModel.error(message="标签名称不能为空", code=400)
+
+        tag = tag_db.create_tag(name, color)
+        return ResponseModel.success(data=tag, message="创建标签成功")
+    except ValueError as e:
+        return ResponseModel.error(message=str(e), code=400)
+    except Exception as e:
+        logger.error(f"创建标签失败：{e}")
+        return ResponseModel.error(message=f"创建标签失败：{str(e)}")
+
+
+@app.put(f"/api/{API_VERSION}/tags/{tag_id}")
+@limiter.limit("30/minute")
+async def update_tag(request: Request, tag_id: str, api_key: str = Depends(get_api_key)):
+    """更新标签"""
+    try:
+        data = await request.json()
+        name = data.get('name')
+        color = data.get('color')
+
+        if not name:
+            return ResponseModel.error(message="标签名称不能为空", code=400)
+
+        tag = tag_db.update_tag(tag_id, name, color)
+        return ResponseModel.success(data=tag, message="更新标签成功")
+    except ValueError as e:
+        return ResponseModel.error(message=str(e), code=404)
+    except Exception as e:
+        logger.error(f"更新标签失败：{e}")
+        return ResponseModel.error(message=f"更新标签失败：{str(e)}")
+
+
+@app.delete(f"/api/{API_VERSION}/tags/{tag_id}")
+@limiter.limit("30/minute")
+async def delete_tag(request: Request, tag_id: str, api_key: str = Depends(get_api_key)):
+    """删除标签"""
+    try:
+        success = tag_db.delete_tag(tag_id)
+        if success:
+            return ResponseModel.success(message="删除标签成功")
+        else:
+            return ResponseModel.error(message="标签不存在", code=404)
+    except Exception as e:
+        logger.error(f"删除标签失败：{e}")
+        return ResponseModel.error(message=f"删除标签失败：{str(e)}")
+
+
+@app.get(f"/api/{API_VERSION}/tags/{tag_id}/documents")
+@limiter.limit("30/minute")
+async def get_tag_documents(request: Request, tag_id: str, api_key: str = Depends(get_api_key)):
+    """获取标签下的文档"""
+    try:
+        doc_ids = tag_db.get_tag_documents(tag_id)
+        return ResponseModel.success(data={"document_ids": doc_ids}, message="获取文档列表成功")
+    except Exception as e:
+        logger.error(f"获取标签文档失败：{e}")
+        return ResponseModel.error(message=f"获取文档列表失败：{str(e)}")
+
+
+@app.post(f"/api/{API_VERSION}/documents/{document_id}/tags")
+@limiter.limit("30/minute")
+async def add_tag_to_document(request: Request, document_id: str, api_key: str = Depends(get_api_key)):
+    """给文档添加标签"""
+    try:
+        data = await request.json()
+        tag_id = data.get('tag_id')
+
+        if not tag_id:
+            return ResponseModel.error(message="标签ID不能为空", code=400)
+
+        success = tag_db.add_tag_to_document(document_id, tag_id)
+        if success:
+            return ResponseModel.success(message="添加标签成功")
+        else:
+            return ResponseModel.error(message="添加标签失败", code=500)
+    except Exception as e:
+        logger.error(f"添加标签失败：{e}")
+        return ResponseModel.error(message=f"添加标签失败：{str(e)}")
+
+
+@app.delete(f"/api/{API_VERSION}/documents/{document_id}/tags/{tag_id}")
+@limiter.limit("30/minute")
+async def remove_tag_from_document(request: Request, document_id: str, tag_id: str, api_key: str = Depends(get_api_key)):
+    """从文档移除标签"""
+    try:
+        success = tag_db.remove_tag_from_document(document_id, tag_id)
+        if success:
+            return ResponseModel.success(message="移除标签成功")
+        else:
+            return ResponseModel.error(message="标签关联不存在", code=404)
+    except Exception as e:
+        logger.error(f"移除标签失败：{e}")
+        return ResponseModel.error(message=f"移除标签失败：{str(e)}")
+
+
+# ========== 导出导入 API ==========
+
+@app.get(f"/api/{API_VERSION}/export")
+@limiter.limit("10/minute")
+async def export_data(
+    request: Request,
+    format: str = "json",
+    api_key: str = Depends(require_permission("export"))
+):
+    """导出数据"""
+    try:
+        # 获取所有文档
+        all_docs = kb.collection.get()
+
+        if not all_docs["documents"]:
+            return ResponseModel.error(message="知识库为空", code=400)
+
+        # 获取所有标签
+        all_tags = tag_db.get_all_tags()
+        tags_map = tag_db.get_all_tags_map()
+
+        from datetime import datetime
+        exported_at = datetime.now().isoformat()
+
+        if format == "json":
+            # JSON 格式导出
+            documents = []
+            for i in range(len(all_docs["ids"])):
+                doc_id = all_docs["ids"][i]
+                documents.append({
+                    "id": doc_id,
+                    "text": all_docs["documents"][i],
+                    "file_path": all_docs["metadatas"][i].get("file_path", ""),
+                    "file_type": all_docs["metadatas"][i].get("file_type", ""),
+                    "tags": [t["name"] for t in tags_map.get(doc_id, [])],
+                    "metadata": {
+                        "chunk_index": all_docs["metadatas"][i].get("chunk_index", 0),
+                        "file_mtime": all_docs["metadatas"][i].get("file_mtime", 0)
+                    }
+                })
+
+            export_data = {
+                "version": "1.0",
+                "exported_at": exported_at,
+                "documents": documents,
+                "tags": [{"id": t["id"], "name": t["name"], "color": t["color"]} for t in all_tags]
+            }
+
+            import json
+            json_str = json.dumps(export_data, ensure_ascii=False, indent=2)
+
+            from fastapi.responses import Response
+            return Response(
+                content=json_str,
+                media_type="application/json",
+                headers={"Content-Disposition": f"attachment; filename=kb_export_{exported_at[:10]}.json"}
+            )
+
+        elif format == "csv":
+            # CSV 格式导出
+            import csv
+            import io
+
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(["id", "text", "file_path", "file_type", "tags"])
+
+            for i in range(len(all_docs["ids"])):
+                doc_id = all_docs["ids"][i]
+                writer.writerow([
+                    doc_id,
+                    all_docs["documents"][i],
+                    all_docs["metadatas"][i].get("file_path", ""),
+                    all_docs["metadatas"][i].get("file_type", ""),
+                    ",".join([t["name"] for t in tags_map.get(doc_id, [])])
+                ])
+
+            from fastapi.responses import Response
+            return Response(
+                content=output.getvalue(),
+                media_type="text/csv",
+                headers={"Content-Disposition": f"attachment; filename=kb_docs_{exported_at[:10]}.csv"}
+            )
+
+        elif format == "md":
+            # Markdown 格式导出
+            md_content = f"# 知识库导出\n\n**导出时间**: {exported_at}\n\n**文档总数**: {len(all_docs['ids'])}\n\n---\n\n"
+
+            for i in range(len(all_docs["ids"])):
+                doc_id = all_docs["ids"][i]
+                metadata = all_docs["metadatas"][i]
+                doc_tags = tags_map.get(doc_id, [])
+
+                md_content += f"## {metadata.get('file_path', '未知文件')}\n\n"
+                md_content += f"- ID: `{doc_id}`\n"
+                md_content += f"- 类型: {metadata.get('file_type', 'unknown')}\n"
+                if doc_tags:
+                    md_content += f"- 标签: {', '.join([t['name'] for t in doc_tags])}\n"
+                md_content += f"\n```\n{all_docs['documents'][i][:500]}...\n```\n\n---\n\n"
+
+            from fastapi.responses import Response
+            return Response(
+                content=md_content,
+                media_type="text/markdown",
+                headers={"Content-Disposition": f"attachment; filename=kb_docs_{exported_at[:10]}.md"}
+            )
+
+        else:
+            return ResponseModel.error(message="不支持的导出格式", code=400)
+
+    except Exception as e:
+        logger.error(f"导出失败：{e}")
+        return ResponseModel.error(message=f"导出失败：{str(e)}")
+
+
+@app.post(f"/api/{API_VERSION}/import")
+@limiter.limit("5/minute")
+async def import_data(
+    request: Request,
+    file: UploadFile = File(...),
+    format: str = "json",
+    api_key: str = Depends(require_permission("import"))
+):
+    """导入数据"""
+    try:
+        # 读取文件内容
+        content = await file.read()
+
+        imported_count = 0
+
+        if format == "json":
+            import json
+            data = json.loads(content)
+
+            # 导入标签
+            for tag_data in data.get("tags", []):
+                try:
+                    tag_db.create_tag(tag_data["name"], tag_data["color"])
+                except ValueError:
+                    pass  # 标签已存在
+
+            # 导入文档
+            for doc in data.get("documents", []):
+                try:
+                    # 添加到向量库
+                    kb.collection.add(
+                        ids=[doc["id"]],
+                        documents=[doc["text"]],
+                        metadatas=[{
+                            "file_path": doc.get("file_path", ""),
+                            "file_type": doc.get("file_type", ""),
+                            "chunk_index": doc.get("metadata", {}).get("chunk_index", 0),
+                            "file_mtime": doc.get("metadata", {}).get("file_mtime", 0)
+                        }]
+                    )
+                    imported_count += 1
+                except Exception as e:
+                    logger.warning(f"导入文档失败：{e}")
+
+            # 重建 BM25 索引
+            kb.rebuild_bm25_index()
+
+            return ResponseModel.success(
+                message=f"导入成功",
+                data={"imported_count": imported_count}
+            )
+
+        elif format == "csv":
+            import csv
+            import io
+
+            content_str = content.decode('utf-8')
+            reader = csv.DictReader(io.StringIO(content_str))
+
+            for row in reader:
+                doc_id = f"import_{uuid.uuid4()}"
+                try:
+                    kb.collection.add(
+                        ids=[doc_id],
+                        documents=[row.get("text", "")],
+                        metadatas=[{
+                            "file_path": row.get("file_path", ""),
+                            "file_type": row.get("file_type", ""),
+                            "chunk_index": 0,
+                            "file_mtime": 0
+                        }]
+                    )
+                    imported_count += 1
+                except Exception as e:
+                    logger.warning(f"导入文档失败：{e}")
+
+            # 重建 BM25 索引
+            kb.rebuild_bm25_index()
+
+            return ResponseModel.success(
+                message=f"导入成功",
+                data={"imported_count": imported_count}
+            )
+
+        else:
+            return ResponseModel.error(message="不支持的导入格式", code=400)
+
+    except Exception as e:
+        logger.error(f"导入失败：{e}")
+        return ResponseModel.error(message=f"导入失败：{str(e)}")
 
 
 @app.post(f"/api/{API_VERSION}/batch_upload")
