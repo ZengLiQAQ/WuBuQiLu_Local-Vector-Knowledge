@@ -454,7 +454,7 @@ class LocalVectorKB:
                 ids=ids,
                 metadatas=metadatas
             )
-            self.client.persist()
+            # ChromaDB 新版本自动持久化
 
             logger.info(f"文件入库成功：{file_path}，分块数：{len(chunks)}")
             return len(chunks)
@@ -546,7 +546,7 @@ class LocalVectorKB:
         """删除指定文件的所有数据"""
         try:
             self.collection.delete(where={"file_path": file_path})
-            self.client.persist()
+            # ChromaDB 新版本自动持久化
             logger.info(f"删除文件数据成功：{file_path}")
             return True
         except Exception as e:
@@ -605,7 +605,7 @@ class LocalVectorKB:
         """清空知识库（谨慎使用）"""
         try:
             self.collection.delete()
-            self.client.persist()
+            # ChromaDB 新版本自动持久化
             logger.warning("知识库已清空")
             return True
         except Exception as e:
