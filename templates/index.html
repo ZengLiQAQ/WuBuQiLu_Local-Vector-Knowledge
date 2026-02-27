@@ -290,6 +290,144 @@
         body.dark-mode .file-list {
             border-color: #48484a;
         }
+
+        /* 标签页导航 */
+        .nav-tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 0;
+        }
+        .nav-tab {
+            padding: 12px 24px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: #666;
+            border-radius: 8px 8px 0 0;
+            transition: all 0.2s;
+            margin-bottom: -1px;
+            border-bottom: 2px solid transparent;
+        }
+        .nav-tab:hover {
+            color: #0071e3;
+            background: #f8f8ff;
+        }
+        .nav-tab.active {
+            color: #0071e3;
+            border-bottom-color: #0071e3;
+            background: #f8f8ff;
+        }
+        body.dark-mode .nav-tabs {
+            border-color: #48484a;
+        }
+        body.dark-mode .nav-tab {
+            color: #aaa;
+        }
+        body.dark-mode .nav-tab:hover {
+            background: #3a3a3c;
+        }
+        body.dark-mode .nav-tab.active {
+            background: #3a3a3c;
+            border-bottom-color: #0071e3;
+        }
+
+        /* 标签页内容 */
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+
+        /* 训练进度条 */
+        .train-progress-container {
+            display: none;
+            margin-top: 15px;
+        }
+        .train-progress-bar {
+            height: 12px;
+            background: #eee;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .train-progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #0071e3, #34c759);
+            border-radius: 6px;
+            transition: width 0.3s;
+        }
+        .train-progress-text {
+            font-size: 14px;
+            margin-top: 8px;
+            color: #666;
+        }
+        body.dark-mode .train-progress-bar {
+            background: #48484a;
+        }
+        body.dark-mode .train-progress-text {
+            color: #aaa;
+        }
+
+        /* 训练日志 */
+        .train-logs {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f8ff;
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        body.dark-mode .train-logs {
+            background: #3a3a3c;
+        }
+
+        /* 模型卡片 */
+        .model-card {
+            display: inline-block;
+            padding: 12px 16px;
+            margin: 8px;
+            background: #f8f8ff;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+        .model-card:hover {
+            border-color: #0071e3;
+        }
+        .model-card.selected {
+            border-color: #0071e3;
+            background: #e8f4ff;
+        }
+        .model-card-name {
+            font-weight: 500;
+            color: #1d1d1f;
+        }
+        .model-card-type {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+        body.dark-mode .model-card {
+            background: #3a3a3c;
+        }
+        body.dark-mode .model-card-name {
+            color: #f5f5f7;
+        }
+        body.dark-mode .model-card-type {
+            color: #aaa;
+        }
+        body.dark-mode .model-card.selected {
+            background: #1a3a5c;
+        }
     </style>
 </head>
 <body>
@@ -297,7 +435,16 @@
         <h1>
             本地向量知识库管理（MacOS优化版）
             <span class="version">v1.0</span>
-        </h1>
+>
+
+        <!--         </h1导航标签页 -->
+        <div class="nav-tabs">
+            <button class="nav-tab active" data-tab="knowledge">知识库管理</button>
+            <button class="nav-tab" data-tab="training">模型训练</button>
+        </div>
+
+        <!-- 知识库管理内容 -->
+        <div id="tab-knowledge" class="tab-content active">
 
         <!-- 统计信息 -->
         <div class="stats">
@@ -394,6 +541,102 @@
         <div class="section">
             <h2>知识库操作（谨慎使用）</h2>
             <button id="clearBtn" class="danger">清空整个知识库</button>
+        </div>
+
+        <!-- 模型训练内容 -->
+        <div id="tab-training" class="tab-content">
+            <!-- 训练数据上传 -->
+            <div class="section">
+                <h2>训练数据上传</h2>
+                <form id="trainUploadForm">
+                    <div class="form-group">
+                        <label for="trainFile">选择训练数据（CSV/TXT）</label>
+                        <input type="file" id="trainFile" name="trainFile" accept=".csv,.txt" required>
+                    </div>
+                    <button type="submit">上传训练数据</button>
+                </form>
+                <div id="trainFileInfo" class="stats" style="display: none; margin-top: 15px;"></div>
+            </div>
+
+            <!-- 训练数据清洗 -->
+            <div class="section">
+                <h2>训练数据清洗</h2>
+                <div class="form-group">
+                    <label for="cleanFileId">选择要清洗的数据</label>
+                    <select id="cleanFileId">
+                        <option value="">请先上传数据</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="minLength">最小文本长度</label>
+                    <input type="number" id="minLength" value="5" min="1" max="100">
+                </div>
+                <div class="form-group">
+                    <label for="maxLength">最大文本长度</label>
+                    <input type="number" id="maxLength" value="512" min="10" max="2000">
+                </div>
+                <button id="cleanDataBtn">清洗数据</button>
+                <div id="cleanResult" class="stats" style="display: none; margin-top: 15px;"></div>
+            </div>
+
+            <!-- 训练配置 -->
+            <div class="section">
+                <h2>训练配置</h2>
+                <div class="form-group">
+                    <label for="baseModel">选择基础模型</label>
+                    <select id="baseModel">
+                        <option value="BAAI/bge-m3">BGE-M3 (推荐 - Mac优化)</option>
+                        <option value="chinese-roberta-wwm-ext">Chinese RoBERTa WWM Ext</option>
+                        <option value="bert-base-chinese">BERT Base Chinese</option>
+                        <option value="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2">Multilingual MiniLM</option>
+                        <option value="shibing624/text2vec-base-chinese">Text2Vec Chinese</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="trainEpochs">训练轮数 (Epochs)</label>
+                    <input type="number" id="trainEpochs" value="5" min="1" max="50">
+                </div>
+                <div class="form-group">
+                    <label for="trainBatchSize">批次大小 (Batch Size)</label>
+                    <input type="number" id="trainBatchSize" value="16" min="1" max="128">
+                </div>
+                <div class="form-group">
+                    <label for="trainLearningRate">学习率 (Learning Rate)</label>
+                    <input type="number" id="trainLearningRate" value="0.00002" step="0.00001" min="0.000001" max="0.001">
+                </div>
+            </div>
+
+            <!-- 开始训练 -->
+            <div class="section">
+                <h2>开始训练</h2>
+                <button id="startTrainBtn" class="secondary">开始训练模型</button>
+                <button id="stopTrainBtn" class="danger" style="display: none;">停止训练</button>
+
+                <div id="trainProgress" class="train-progress-container">
+                    <div class="train-progress-bar">
+                        <div id="trainProgressBar" class="train-progress-fill"></div>
+                    </div>
+                    <div id="trainProgressText" class="train-progress-text">0% 准备中...</div>
+                </div>
+
+                <div id="trainLogs" class="train-logs" style="display: none;"></div>
+            </div>
+
+            <!-- 模型管理 -->
+            <div class="section">
+                <h2>已训练模型</h2>
+                <button id="refreshModelsBtn" class="secondary">刷新模型列表</button>
+                <div id="modelList" class="file-list">
+                    <p style="padding: 20px; text-align: center; color: #666;">点击"刷新模型列表"查看已训练模型</p>
+                </div>
+            </div>
+
+            <!-- 模型验证 -->
+            <div class="section">
+                <h2>模型验证</h2>
+                <button id="validateModelBtn" class="secondary">验证最新模型</button>
+                <div id="validateResult" class="stats" style="display: none; margin-top: 15px;"></div>
+            </div>
         </div>
     </div>
 
@@ -742,6 +985,298 @@
         // 页面加载完成后初始化图表
         window.addEventListener('load', () => {
             loadStatsChart();
+        });
+
+        // ========== 标签页导航 ==========
+        const navTabs = document.querySelectorAll('.nav-tab');
+        navTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                // 移除所有活动状态
+                navTabs.forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+                // 激活当前标签页
+                tab.classList.add('active');
+                const tabId = tab.getAttribute('data-tab');
+                document.getElementById('tab-' + tabId).classList.add('active');
+            });
+        });
+
+        // ========== 模型训练功能 ==========
+
+        // 训练数据上传
+        let currentTrainFileId = null;
+        document.getElementById('trainUploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('trainFile');
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch(`/api/${API_VERSION}/train/upload`, {
+                    method: 'POST',
+                    headers: { 'X-API-Key': API_KEY },
+                    body: formData
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    currentTrainFileId = data.data.id;
+                    const infoDiv = document.getElementById('trainFileInfo');
+                    infoDiv.style.display = 'block';
+                    infoDiv.innerHTML = `
+                        <p><strong>文件名：</strong>${data.data.filename}</p>
+                        <p><strong>总行数：</strong>${data.data.total_rows}</p>
+                        <p><strong>列：</strong>${data.data.columns.join(', ')}</p>
+                    `;
+                    // 刷新数据列表
+                    loadTrainDataList();
+                } else {
+                    alert('上传失败：' + data.message);
+                }
+            } catch (err) {
+                alert('上传失败：' + err.message);
+            }
+        });
+
+        // 加载训练数据列表
+        async function loadTrainDataList() {
+            try {
+                const res = await fetch(`/api/${API_VERSION}/train/data`, {
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                const data = await res.json();
+
+                const select = document.getElementById('cleanFileId');
+                select.innerHTML = '';
+
+                if (data.success && data.data.length > 0) {
+                    data.data.forEach(f => {
+                        const option = document.createElement('option');
+                        option.value = f.id;
+                        option.textContent = `${f.filename} (${(f.size / 1024).toFixed(1)}KB)`;
+                        select.appendChild(option);
+                    });
+                } else {
+                    select.innerHTML = '<option value="">暂无数据</option>';
+                }
+            } catch (err) {
+                console.error('加载数据列表失败：' + err.message);
+            }
+        }
+
+        // 数据清洗
+        document.getElementById('cleanDataBtn').addEventListener('click', async () => {
+            const fileId = document.getElementById('cleanFileId').value;
+            if (!fileId) {
+                alert('请选择要清洗的数据');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/${API_VERSION}/train/clean`, {
+                    method: 'POST',
+                    headers: {
+                        'X-API-Key': API_KEY,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        file_id: fileId,
+                        min_length: parseInt(document.getElementById('minLength').value),
+                        max_length: parseInt(document.getElementById('maxLength').value)
+                    })
+                });
+                const data = await res.json();
+
+                const resultDiv = document.getElementById('cleanResult');
+                resultDiv.style.display = 'block';
+                if (data.success) {
+                    resultDiv.innerHTML = `
+                        <p><strong>清洗完成！</strong></p>
+                        <p>原始数量：${data.data.original_count}</p>
+                        <p>清洗后数量：${data.data.cleaned_count}</p>
+                        <p>保存文件名：${data.data.filename}</p>
+                    `;
+                    // 更新文件ID为清洗后的
+                    const fileIdMatch = data.data.filename.match(/^clean_.*_([a-f0-9]+)_/);
+                    if (fileIdMatch) {
+                        currentTrainFileId = fileIdMatch[1];
+                    }
+                } else {
+                    resultDiv.innerHTML = `<p style="color: red;">清洗失败：${data.message}</p>`;
+                }
+            } catch (err) {
+                alert('清洗失败：' + err.message);
+            }
+        });
+
+        // 开始训练
+        let trainPollInterval = null;
+        document.getElementById('startTrainBtn').addEventListener('click', async () => {
+            if (!currentTrainFileId) {
+                alert('请先上传并清洗训练数据');
+                return;
+            }
+
+            const config = {
+                file_id: currentTrainFileId,
+                base_model: document.getElementById('baseModel').value,
+                epochs: parseInt(document.getElementById('trainEpochs').value),
+                batch_size: parseInt(document.getElementById('trainBatchSize').value),
+                learning_rate: parseFloat(document.getElementById('trainLearningRate').value)
+            };
+
+            try {
+                const res = await fetch(`/api/${API_VERSION}/train/start`, {
+                    method: 'POST',
+                    headers: {
+                        'X-API-Key': API_KEY,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(config)
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    document.getElementById('startTrainBtn').style.display = 'none';
+                    document.getElementById('stopTrainBtn').style.display = 'inline-block';
+                    document.getElementById('trainProgress').style.display = 'block';
+                    document.getElementById('trainLogs').style.display = 'block';
+
+                    // 开始轮询训练状态
+                    trainPollInterval = setInterval(async () => {
+                        const statusRes = await fetch(`/api/${API_VERSION}/train/status`, {
+                            headers: { 'X-API-Key': API_KEY }
+                        });
+                        const statusData = await statusRes.json();
+
+                        if (statusData.success) {
+                            const status = statusData.data;
+                            document.getElementById('trainProgressBar').style.width = status.progress + '%';
+                            document.getElementById('trainProgressText').textContent = status.progress + '% 训练中...';
+
+                            if (status.logs && status.logs.length > 0) {
+                                document.getElementById('trainLogs').textContent = status.logs.join('\n');
+                            }
+
+                            if (!status.running && status.progress >= 100) {
+                                clearInterval(trainPollInterval);
+                                document.getElementById('startTrainBtn').style.display = 'inline-block';
+                                document.getElementById('stopTrainBtn').style.display = 'none';
+                                document.getElementById('trainProgressText').textContent = '训练完成！';
+                                refreshModelList();
+                            }
+                        }
+                    }, 2000);
+                } else {
+                    alert('启动失败：' + data.message);
+                }
+            } catch (err) {
+                alert('启动失败：' + err.message);
+            }
+        });
+
+        // 停止训练
+        document.getElementById('stopTrainBtn').addEventListener('click', async () => {
+            try {
+                await fetch(`/api/${API_VERSION}/train/stop`, {
+                    method: 'POST',
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                clearInterval(trainPollInterval);
+                document.getElementById('startTrainBtn').style.display = 'inline-block';
+                document.getElementById('stopTrainBtn').style.display = 'none';
+            } catch (err) {
+                alert('停止失败：' + err.message);
+            }
+        });
+
+        // 刷新模型列表
+        async function refreshModelList() {
+            try {
+                const res = await fetch(`/api/${API_VERSION}/train/models/list`, {
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                const data = await res.json();
+
+                const listDiv = document.getElementById('modelList');
+                listDiv.innerHTML = '';
+
+                if (data.success && data.data.length > 0) {
+                    data.data.forEach(m => {
+                        const item = document.createElement('div');
+                        item.className = 'file-item';
+                        item.innerHTML = `
+                            <div class="file-info">
+                                <div class="file-name">${m.version}</div>
+                                <div class="file-meta">
+                                    路径：${m.path} | 有效：${m.valid ? '是' : '否'} | 部署：${m.deployed ? '是' : '否'}
+                                </div>
+                            </div>
+                            <div class="file-actions">
+                                <button onclick="deployModel('${m.version}')">部署</button>
+                            </div>
+                        `;
+                        listDiv.appendChild(item);
+                    });
+                } else {
+                    listDiv.innerHTML = '<p style="padding: 20px; text-align: center; color: #666;">暂无已训练模型</p>';
+                }
+            } catch (err) {
+                console.error('加载模型列表失败：' + err.message);
+            }
+        }
+
+        document.getElementById('refreshModelsBtn').addEventListener('click', refreshModelList);
+
+        // 部署模型
+        window.deployModel = async function(version) {
+            if (!confirm(`确认部署模型 ${version}？`)) return;
+
+            try {
+                const res = await fetch(`/api/${API_VERSION}/train/deploy`, {
+                    method: 'POST',
+                    headers: {
+                        'X-API-Key': API_KEY,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ version: version })
+                });
+                const data = await res.json();
+                alert(data.message);
+                refreshModelList();
+            } catch (err) {
+                alert('部署失败：' + err.message);
+            }
+        };
+
+        // 验证模型
+        document.getElementById('validateModelBtn').addEventListener('click', async () => {
+            try {
+                const res = await fetch(`/api/${API_VERSION}/train/validate`, {
+                    method: 'POST',
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                const data = await res.json();
+
+                const resultDiv = document.getElementById('validateResult');
+                resultDiv.style.display = 'block';
+
+                if (data.success) {
+                    let html = `<p><strong>模型验证结果</strong></p>`;
+                    data.data.results.forEach(r => {
+                        html += `<p>${r.test}: ${r.status} - ${JSON.stringify(r.detail)}</p>`;
+                    });
+                    resultDiv.innerHTML = html;
+                } else {
+                    resultDiv.innerHTML = `<p style="color: red;">验证失败：${data.message}</p>`;
+                }
+            } catch (err) {
+                alert('验证失败：' + err.message);
+            }
         });
     </script>
 </body>
