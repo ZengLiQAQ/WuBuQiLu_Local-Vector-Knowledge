@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FileText, Search, Tag, Download, Settings } from 'lucide-react';
+import { FileText, Search, Tag, Download, Settings, TrainTrack } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -10,6 +10,7 @@ const navItems = [
   { href: '/search', label: '搜索', icon: Search },
   { href: '/tags', label: '标签', icon: Tag },
   { href: '/export', label: '导出导入', icon: Download },
+  { href: '/train', label: '模型训练', icon: TrainTrack },
   { href: '/settings', label: '设置', icon: Settings },
 ];
 
