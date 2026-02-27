@@ -1,0 +1,38 @@
+# 知识库核心配置
+kb:
+  path: "./local_vector_db"          # 向量库存储路径
+  collection_name: "multi_file_kb"   # 集合名称
+  chunk_size: 500                    # 默认分块大小
+  chunk_overlap: 50                  # 默认分块重叠长度
+  max_file_size: 500                 # 最大文件大小（MB）
+  incremental_update: true           # 开启增量更新
+
+# 模型配置（MacOS优化）
+model:
+  embed_model: "BAAI/bge-m3"         # 主嵌入模型
+  device: "auto"                     # auto=自动检测MPS/CPU
+  normalize_embeddings: true         # 归一化提升检索精度
+  quantization: true                 # 开启8bit量化
+  batch_size: 64                     # 批量编码大小（M系列设64，Intel设32）
+
+# ChromaDB优化配置
+chroma:
+  hnsw_space: "cosine"               # 余弦相似度（最优）
+  hnsw_ef_construction: 200          # 构建时精度（越大越准，越慢）
+  hnsw_M: 16                         # 邻居数
+  hnsw_ef: 100                       # 检索时精度
+  database_impl: "leveldb"           # LevelDB后端（比SQLite快10倍）
+
+# WebUI配置
+web:
+  host: "0.0.0.0"                    # 监听地址
+  port: 8000                         # 端口
+  reload: true                       # 开发模式自动重载
+  api_key: "local_kb_2026_secure_key" # API鉴权密钥
+
+# 日志配置
+log:
+  level: "INFO"                      # 日志级别
+  file: "kb_logs.log"                # 日志文件
+  rotation: "100MB"                  # 日志轮转大小
+  retention: 7                       # 日志保留天数

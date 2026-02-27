@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>本地向量知识库管理（MacOS优化版）</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        body {
+            max-width: 1400px;
+            margin: 20px auto;
+            padding: 0 20px;
+            background: #f5f5f7;
+            transition: background 0.3s;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: background 0.3s, color 0.3s;
+        }
+        h1 {
+            color: #1d1d1f;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+            transition: color 0.3s;
+        }
+        .version {
+            font-size: 14px;
+            color: #666;
+            margin-left: 10px;
+        }
+        .stats {
+            background: #f8f8ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            transition: background 0.3s;
+        }
+        .section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.05);
+            transition: background 0.3s;
+        }
+        h2 {
+            color: #1d1d1f;
+            margin-bottom: 15px;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            transition: color 0.3s;
+        }
+        h2::before {
+            content: "●";
+            color: #0071e3;
+            margin-right: 8px;
+            font-size: 12px;
+        }
+        .form-group {
+            margin: 15px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #1d1d1f;
+            transition: color 0.3s;
+        }
+        input, select, textarea, button {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: background 0.3s, color 0.3s, border-color 0.3s;
+        }
+        input[type="file"] {
+            padding: 8px;
+            border: 1px dashed #ddd;
+        }
+        button {
+            background: #0071e3;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            margin-top: 10px;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #0077ed;
+        }
+        .danger {
+            background: #ff3b30;
+        }
+        .danger:hover {
+            background: #ff453a;
+        }
+        .secondary {
+            background: #f5f5f7;
+            color: #1d1d1f;
+        }
+        .secondary:hover {
+            background: #e8e8ed;
+        }
+        #results {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f8ff;
+            border-radius: 8px;
+            max-height: 500px;
+            overflow-y: auto;
+            transition: background 0.3s;
+        }
+        .result-item {
+            margin: 15px 0;
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            transition: background 0.3s;
+        }
+        .result-item:last-child {
+            border-bottom: none;
+        }
+        .distance {
+            color: #0071e3;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+        .match-score {
+            color: #34c759;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        .metadata {
+            font-size: 12px;
+            color: #666;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px dashed #eee;
+            transition: color 0.3s;
+        }
+        mark {
+            background: #fff3cc;
+            padding: 2px 4px;
+            border-radius: 2px;
+        }
+        .progress-container {
+            display: none;
+            margin-top: 15px;
+        }
+        .progress-bar {
+            height: 8px;
+            background: #eee;
+            border-radius: 4px;
+            overflow: hidden;
+            transition: background 0.3s;
+        }
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: #0071e3;
+            border-radius: 4px;
+            transition: width 0.3s;
+        }
+        .progress-text {
+            font-size: 12px;
+            margin-top: 5px;
+            color: #666;
+            transition: color 0.3s;
+        }
+        .file-list {
+            margin-top: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            border-radius: 6px;
+            transition: border-color 0.3s;
+        }
+        .file-item {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+            transition: background 0.2s;
+        }
+        .file-item:hover {
+            background: #f8f8ff;
+        }
+        .file-item:last-child {
+            border-bottom: none;
+        }
+        .file-checkbox {
+            margin-right: 10px;
+            width: auto;
+        }
+        .file-info {
+            flex: 1;
+        }
+        .file-name {
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+        .file-meta {
+            font-size: 12px;
+            color: #666;
+        }
+        .file-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .file-actions button {
+            width: auto;
+            padding: 6px 12px;
+            font-size: 12px;
+            margin-top: 0;
+        }
+        .chart-container {
+            width: 100%;
+            height: 400px;
+            margin-top: 20px;
+        }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .btn-group button {
+            flex: 1;
+        }
+        .dark-mode-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: auto;
+            padding: 8px 16px;
+            font-size: 14px;
+            z-index: 1000;
+        }
+
+        /* 暗黑模式 */
+        body.dark-mode {
+            background: #1a1a1a;
+        }
+        body.dark-mode .container {
+            background: #2c2c2e;
+            color: #f5f5f7;
+        }
+        body.dark-mode h1, body.dark-mode h2, body.dark-mode label {
+            color: #f5f5f7;
+        }
+        body.dark-mode .stats, body.dark-mode #results, body.dark-mode .result-item {
+            background: #3a3a3c;
+        }
+        body.dark-mode .section {
+            background: #2c2c2e;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.3);
+        }
+        body.dark-mode input, body.dark-mode select, body.dark-mode textarea {
+            background: #48484a;
+            color: #f5f5f7;
+            border-color: #58585a;
+        }
+        body.dark-mode input[type="file"] {
+            border-color: #58585a;
+        }
+        body.dark-mode .metadata, body.dark-mode .progress-text, body.dark-mode .file-meta {
+            color: #aaa;
+        }
+        body.dark-mode .progress-bar {
+            background: #48484a;
+        }
+        body.dark-mode mark {
+            background: #4a4a2c;
+            color: #f5f5f7;
+        }
+        body.dark-mode .file-item:hover {
+            background: #3a3a3c;
+        }
+        body.dark-mode .file-list {
+            border-color: #48484a;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>
+            本地向量知识库管理（MacOS优化版）
+            <span class="version">v1.0</span>
+        </h1>
+
+        <!-- 统计信息 -->
+        <div class="stats">
+            <p><strong>知识库名称：</strong>{{ stats.collection_name | default('default') }}</p>
+            <p><strong>总文本块数：</strong>{{ stats.total_chunks | default(0) }}</p>
+            <p><strong>存储路径：</strong>{{ stats.storage_path | default('./local_vector_db') }}</p>
+            <p><strong>支持文件类型：</strong>{{ stats.supported_file_types | join(', ') if stats.supported_file_types else 'pdf, md, xlsx, jpg, png, txt, docx, pptx' }}</p>
+        </div>
+
+        <!-- 1. 文件上传入库 -->
+        <div class="section">
+            <h2>文件上传 & 入库</h2>
+            <form id="uploadForm">
+                <div class="form-group">
+                    <label for="file">选择文件（支持PDF/MD/Excel/图片/TXT/Word/PPT）</label>
+                    <input type="file" id="file" name="file" accept=".pdf,.md,.xlsx,.jpg,.png,.txt,.docx,.pptx" multiple required>
+                </div>
+
+                <!-- 进度条 -->
+                <div id="uploadProgress" class="progress-container">
+                    <div class="progress-bar">
+                        <div id="progressBar" class="progress-fill"></div>
+                    </div>
+                    <div id="progressText" class="progress-text">0% 准备中...</div>
+                </div>
+
+                <button type="submit">上传并入库</button>
+            </form>
+        </div>
+
+        <!-- 2. 相似性检索 -->
+        <div class="section">
+            <h2>相似性检索（混合检索+关键词高亮）</h2>
+            <form id="searchForm">
+                <div class="form-group">
+                    <label for="query">检索关键词</label>
+                    <textarea id="query" name="query" rows="3" required>测试查询</textarea>
+                </div>
+                <div class="form-group">
+                    <label for="top_k">返回条数</label>
+                    <input type="number" id="top_k" name="top_k" value="5" min="1" max="20">
+                </div>
+                <div class="form-group">
+                    <label for="file_type_filter">文件类型过滤（可选）</label>
+                    <select id="file_type_filter" name="file_type_filter">
+                        <option value="">全部类型</option>
+                        <option value=".pdf">PDF</option>
+                        <option value=".md">Markdown</option>
+                        <option value=".xlsx">Excel</option>
+                        <option value=".jpg">JPG图片</option>
+                        <option value=".png">PNG图片</option>
+                        <option value=".txt">TXT文本</option>
+                        <option value=".docx">Word</option>
+                        <option value=".pptx">PPT</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="hybrid">开启混合检索（向量+关键词）</label>
+                    <select id="hybrid" name="hybrid">
+                        <option value="true">是（推荐）</option>
+                        <option value="false">否（仅向量）</option>
+                    </select>
+                </div>
+
+                <div class="btn-group">
+                    <button type="submit">开始检索</button>
+                    <button type="button" id="exportResultsBtn" class="secondary">导出检索结果（JSON）</button>
+                </div>
+            </form>
+
+            <div id="results"></div>
+        </div>
+
+        <!-- 3. 已入库文件管理 -->
+        <div class="section">
+            <h2>已入库文件管理</h2>
+            <div class="btn-group">
+                <button type="button" id="refreshFilesBtn" class="secondary">刷新文件列表</button>
+                <button type="button" id="batchDeleteBtn" class="danger">批量删除选中文件</button>
+            </div>
+
+            <div id="fileList" class="file-list">
+                <p style="padding: 20px; text-align: center; color: #666;">点击"刷新文件列表"查看已入库文件</p>
+            </div>
+        </div>
+
+        <!-- 4. 知识库统计图表 -->
+        <div class="section">
+            <h2>知识库统计图表</h2>
+            <div id="fileTypeChart" class="chart-container"></div>
+        </div>
+
+        <!-- 5. 知识库操作 -->
+        <div class="section">
+            <h2>知识库操作（谨慎使用）</h2>
+            <button id="clearBtn" class="danger">清空整个知识库</button>
+        </div>
+    </div>
+
+    <!-- 暗黑模式切换 -->
+    <button id="darkModeBtn" class="dark-mode-toggle">切换暗黑模式</button>
+
+    <script>
+        // 全局变量
+        let currentSearchResults = [];
+        const API_KEY = "local_kb_2026_secure_key"; // 与配置文件一致
+        const API_VERSION = "{{ api_version }}";
+
+        // 1. 暗黑模式切换
+        const darkModeBtn = document.getElementById('darkModeBtn');
+        darkModeBtn.addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            // 保存到本地存储
+            localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
+            // 重新渲染图表
+            loadStatsChart();
+        });
+
+        // 初始化暗黑模式
+        if (localStorage.getItem('darkMode') === 'true') {
+            document.body.classList.add('dark-mode');
+        }
+
+        // 2. 文件上传处理
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('file');
+            const files = fileInput.files;
+            if (files.length === 0) return;
+
+            // 显示进度条
+            const progressDiv = document.getElementById('uploadProgress');
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            progressDiv.style.display = 'block';
+            progressBar.style.width = '0%';
+            progressText.textContent = '0% 准备上传...';
+
+            // 遍历上传每个文件
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const formData = new FormData();
+                formData.append('file', file);
+
+                try {
+                    // 异步上传请求
+                    const res = await fetch(`/api/${API_VERSION}/upload_async`, {
+                        method: 'POST',
+                        headers: {
+                            'X-API-Key': API_KEY
+                        },
+                        body: formData
+                    });
+
+                    const data = await res.json();
+                    if (data.success) {
+                        // 轮询任务状态
+                        const taskId = data.data.task_id;
+                        progressText.textContent = `处理中（${file.name}）...`;
+
+                        const pollInterval = setInterval(async () => {
+                            const taskRes = await fetch(`/api/${API_VERSION}/task/${taskId}`, {
+                                headers: { 'X-API-Key': API_KEY }
+                            });
+                            const taskData = await taskRes.json();
+
+                            if (taskData.success) {
+                                const task = taskData.data.task;
+                                progressBar.style.width = `${task.progress}%`;
+
+                                if (task.status === 'completed') {
+                                    clearInterval(pollInterval);
+                                    progressText.textContent = `完成：${task.message}`;
+                                    // 3秒后隐藏进度条
+                                    setTimeout(() => {
+                                        progressDiv.style.display = 'none';
+                                        fileInput.value = ''; // 清空文件选择
+                                    }, 3000);
+                                    // 刷新文件列表和图表
+                                    refreshFileList();
+                                    loadStatsChart();
+                                } else if (task.status === 'failed') {
+                                    clearInterval(pollInterval);
+                                    progressText.textContent = `失败：${task.message}`;
+                                }
+                            }
+                        }, 1000);
+                    } else {
+                        progressText.textContent = `上传失败：${data.message}`;
+                    }
+                } catch (err) {
+                    progressText.textContent = `上传失败：${err.message}`;
+                }
+            }
+        });
+
+        // 3. 检索处理
+        document.getElementById('searchForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData();
+            formData.append('query', document.getElementById('query').value);
+            formData.append('top_k', document.getElementById('top_k').value);
+            formData.append('file_type_filter', document.getElementById('file_type_filter').value);
+            formData.append('hybrid', document.getElementById('hybrid').value);
+
+            try {
+                const res = await fetch(`/api/${API_VERSION}/search`, {
+                    method: 'POST',
+                    headers: { 'X-API-Key': API_KEY },
+                    body: formData
+                });
+
+                const data = await res.json();
+                const resultsDiv = document.getElementById('results');
+                resultsDiv.innerHTML = '';
+
+                if (data.success && data.data.results.length > 0) {
+                    currentSearchResults = data.data.results;
+                    data.data.results.forEach((item, idx) => {
+                        const itemDiv = document.createElement('div');
+                        itemDiv.className = 'result-item';
+                        itemDiv.innerHTML = `
+                            <h3>结果 ${idx+1}</h3>
+                            <p class="distance">
+                                相似度距离：${item.similarity_distance}
+                                <span class="match-score">关键词匹配度：${item.match_score}</span>
+                            </p>
+                            <p>${item.highlighted_text || item.text}</p>
+                            <p class="metadata">
+                                来源：${item.metadata.file_path} |
+                                类型：${item.metadata.file_type} |
+                                版本：${item.metadata.version}
+                            </p>
+                        `;
+                        resultsDiv.appendChild(itemDiv);
+                    });
+                } else {
+                    resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px;">未找到相关结果</p>';
+                }
+            } catch (err) {
+                alert('检索失败：' + err.message);
+            }
+        });
+
+        // 4. 导出检索结果
+        document.getElementById('exportResultsBtn').addEventListener('click', () => {
+            if (currentSearchResults.length === 0) {
+                alert('暂无检索结果可导出');
+                return;
+            }
+
+            const blob = new Blob([JSON.stringify(currentSearchResults, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `检索结果_${new Date().getTime()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        // 5. 刷新文件列表
+        async function refreshFileList() {
+            try {
+                const res = await fetch(`/api/${API_VERSION}/stats`, {
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                const data = await res.json();
+
+                const fileListDiv = document.getElementById('fileList');
+                fileListDiv.innerHTML = '';
+
+                if (data.success && data.data.file_list && data.data.file_list.length > 0) {
+                    data.data.file_list.forEach(file => {
+                        const fileItem = document.createElement('div');
+                        fileItem.className = 'file-item';
+                        fileItem.innerHTML = `
+                            <input type="checkbox" class="file-checkbox" value="${file.path}">
+                            <div class="file-info">
+                                <div class="file-name">${file.path}</div>
+                                <div class="file-meta">
+                                    类型：${file.type} | 文本块数：${file.chunk_count} |
+                                    修改时间：${new Date(file.mtime * 1000).toLocaleString()}
+                                </div>
+                            </div>
+                            <div class="file-actions">
+                                <button onclick="deleteFile('${file.path}')">删除</button>
+                            </div>
+                        `;
+                        fileListDiv.appendChild(fileItem);
+                    });
+                } else {
+                    fileListDiv.innerHTML = '<p style="padding: 20px; text-align: center; color: #666;">暂无入库文件</p>';
+                }
+            } catch (err) {
+                alert('刷新文件列表失败：' + err.message);
+            }
+        }
+
+        document.getElementById('refreshFilesBtn').addEventListener('click', refreshFileList);
+
+        // 6. 删除单个文件
+        async function deleteFile(filePath) {
+            if (!confirm(`确认删除 ${filePath} 的所有入库数据？`)) return;
+
+            try {
+                const formData = new FormData();
+                formData.append('file_path', filePath);
+
+                const res = await fetch(`/api/${API_VERSION}/delete`, {
+                    method: 'POST',
+                    headers: { 'X-API-Key': API_KEY },
+                    body: formData
+                });
+
+                const data = await res.json();
+                alert(data.message);
+                refreshFileList();
+                loadStatsChart();
+            } catch (err) {
+                alert('删除失败：' + err.message);
+            }
+        }
+
+        // 7. 批量删除文件
+        document.getElementById('batchDeleteBtn').addEventListener('click', async () => {
+            const selectedFiles = document.querySelectorAll('.file-checkbox:checked');
+            if (selectedFiles.length === 0) {
+                alert('请选择要删除的文件');
+                return;
+            }
+
+            if (!confirm(`确认删除选中的${selectedFiles.length}个文件？`)) return;
+
+            const filePaths = Array.from(selectedFiles).map(checkbox => checkbox.value);
+
+            try {
+                const res = await fetch(`/api/${API_VERSION}/batch_delete`, {
+                    method: 'POST',
+                    headers: {
+                        'X-API-Key': API_KEY,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ file_paths: filePaths })
+                });
+
+                const data = await res.json();
+                alert(data.message);
+                refreshFileList();
+                loadStatsChart();
+            } catch (err) {
+                alert('批量删除失败：' + err.message);
+            }
+        });
+
+        // 8. 清空知识库
+        document.getElementById('clearBtn').addEventListener('click', async () => {
+            if (!confirm('⚠️ 确认清空整个知识库？此操作不可恢复！')) return;
+
+            try {
+                const res = await fetch(`/api/${API_VERSION}/clear`, {
+                    method: 'POST',
+                    headers: { 'X-API-Key': API_KEY }
+                });
+
+                const data = await res.json();
+                alert(data.message);
+                refreshFileList();
+                loadStatsChart();
+            } catch (err) {
+                alert('清空失败：' + err.message);
+            }
+        });
+
+        // 9. 加载统计图表
+        async function loadStatsChart() {
+            try {
+                const res = await fetch(`/api/${API_VERSION}/stats`, {
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                const data = await res.json();
+
+                if (!data.success || !data.data.file_type_dist) return;
+
+                // 初始化图表
+                const chart = echarts.init(document.getElementById('fileTypeChart'));
+
+                // 适配暗黑模式
+                const isDark = document.body.classList.contains('dark-mode');
+                const textColor = isDark ? '#f5f5f7' : '#1d1d1f';
+                const bgColor = isDark ? '#2c2c2e' : 'transparent';
+
+                // 图表配置
+                const option = {
+                    backgroundColor: bgColor,
+                    title: {
+                        text: '文件类型分布',
+                        textStyle: { color: textColor }
+                    },
+                    tooltip: {
+                        trigger: 'item',
+                        formatter: '{a} <br/>{b}: {c} ({d}%)'
+                    },
+                    legend: {
+                        orient: 'vertical',
+                        left: 'left',
+                        textStyle: { color: textColor }
+                    },
+                    series: [
+                        {
+                            name: '文件类型',
+                            type: 'pie',
+                            radius: '50%',
+                            data: Object.entries(data.data.file_type_dist).map(([name, value]) => ({
+                                name: name,
+                                value: value
+                            })),
+                            emphasis: {
+                                itemStyle: {
+                                    shadowBlur: 10,
+                                    shadowOffsetX: 0,
+                                    shadowColor: 'rgba(0, 0, 0, 0.5)'
+                                }
+                            },
+                            label: {
+                                color: textColor
+                            }
+                        }
+                    ]
+                };
+
+                chart.setOption(option);
+
+                // 监听窗口大小变化
+                window.addEventListener('resize', () => {
+                    chart.resize();
+                });
+            } catch (err) {
+                console.error('加载统计图表失败：' + err.message);
+            }
+        }
+
+        // 页面加载完成后初始化图表
+        window.addEventListener('load', () => {
+            loadStatsChart();
+        });
+    </script>
+</body>
+</html>
