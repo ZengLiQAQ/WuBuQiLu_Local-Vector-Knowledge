@@ -22,7 +22,11 @@ from slowapi.errors import RateLimitExceeded
 import aiofiles
 import yaml
 
-# 导入核心知识库类
+# 简单文件名安全处理
+def safe_filename(filename: str) -> str:
+    """移除文件名中的路径遍历字符"""
+    return os.path.basename(filename)
+
 from LocalVectorKB import LocalVectorKB, load_config
 
 
@@ -34,7 +38,7 @@ TEMP_DIR = "./temp_uploads"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
 # ========== 模型训练配置 ==========
-MODEL_TRAIN_BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "modelTrain")
+MODEL_TRAIN_BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model_train")
 MODEL_DATA_DIR = os.path.join(MODEL_TRAIN_BASE_DIR, "data")
 MODEL_MODELS_DIR = os.path.join(MODEL_TRAIN_BASE_DIR, "models")
 MODEL_CHECKPOINTS_DIR = os.path.join(MODEL_TRAIN_BASE_DIR, "checkpoints")
@@ -204,8 +208,9 @@ async def upload_file_async(
         task_id = hashlib.md5(f"{file.filename}_{time.time()}".encode()).hexdigest()
         tasks[task_id] = {"status": "pending", "progress": 0}
 
-        # 保存临时文件
-        file_path = os.path.join(TEMP_DIR, file.filename)
+        # 保存临时文件（使用安全文件名）
+        safe_name = safe_filename(file.filename)
+        file_path = os.path.join(TEMP_DIR, safe_name)
         async with aiofiles.open(file_path, "wb") as f:
             content = await file.read()
             await f.write(content)
