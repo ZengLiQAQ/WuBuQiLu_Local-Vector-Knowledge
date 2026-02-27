@@ -68,16 +68,11 @@ class LocalVectorKB:
         self.chroma_config = CONFIG["chroma"]
 
         try:
+            # ChromaDB 新版本兼容配置（只保留有效参数）
             self.client = chromadb.Client(
                 Settings(
                     persist_directory=self.kb_config["path"],
                     anonymized_telemetry=False,
-                    allow_reset=False,
-                    is_persistent=True,
-                    database_impl=self.chroma_config["database_impl"],
-                    hnsw_ef_construction=self.chroma_config["hnsw_ef_construction"],
-                    hnsw_M=self.chroma_config["hnsw_M"],
-                    hnsw_ef=self.chroma_config["hnsw_ef"],
                 )
             )
             logger.info(f"ChromaDB初始化成功，存储路径：{self.kb_config['path']}")
@@ -88,8 +83,6 @@ class LocalVectorKB:
                 Settings(
                     persist_directory=self.kb_config["path"],
                     anonymized_telemetry=False,
-                    allow_reset=False,
-                    is_persistent=True,
                 )
             )
             logger.warning("降级到SQLite后端运行")
@@ -132,19 +125,22 @@ class LocalVectorKB:
         else:
             device = model_config["device"]
 
+        # 禁用量化（MPS不支持）
+        use_quantization = model_config.get("quantization", False) and device != "mps"
+
         # 模型加载参数
-        model_kwargs = {"device": device}
-        if model_config["quantization"]:
+        model_kwargs = {}
+        if use_quantization:
             model_kwargs["quantization_config"] = {
                 "load_in_8bit": True,
-                "device_map": device
             }
 
         # 加载模型
         try:
             self.embed_model = SentenceTransformer(
                 model_config["embed_model"],
-                model_kwargs=model_kwargs
+                device=device,
+                **model_kwargs
             )
             # 编码参数
             self.encode_kwargs = {
@@ -155,11 +151,11 @@ class LocalVectorKB:
 
             # 预加载模型（避免首次调用卡顿）
             self.embed_model.encode(["预加载模型"], **self.encode_kwargs)
-            logger.info(f"嵌入模型加载成功：{model_config['embed_model']}（设备：{device}，量化：{model_config['quantization']}）")
+            logger.info(f"嵌入模型加载成功：{model_config['embed_model']}（设备：{device}，量化：{use_quantization}）")
         except Exception as e:
             logger.error(f"加载模型失败：{e}")
             # 降级到bge-small-zh-v1.5
-            self.embed_model = SentenceTransformer("BAAI/bge-small-zh-v1.5", model_kwargs={"device": device})
+            self.embed_model = SentenceTransformer("BAAI/bge-small-zh-v1.5", device=device)
             self.encode_kwargs = {"normalize_embeddings": True, "batch_size": 32, "show_progress_bar": False}
             logger.warning("降级到bge-small-zh-v1.5模型运行")
 
@@ -596,7 +592,7 @@ class LocalVectorKB:
             return {
                 "total_chunks": self.collection.count(),
                 "collection_name": self.collection.name,
-                "storage_path": self.client.settings.persist_directory,
+                "storage_path": self.kb_config["path"],
                 "supported_file_types": list(self.file_parser_map.keys()),
                 "file_type_dist": file_type_dist,
                 "file_list": list(file_list.values())

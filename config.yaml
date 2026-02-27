@@ -26,7 +26,7 @@ chroma:
 # WebUI配置
 web:
   host: "0.0.0.0"                    # 监听地址
-  port: 8000                         # 端口
+  port: 18080                       # 端口
   reload: true                       # 开发模式自动重载
   api_key: "local_kb_2026_secure_key" # API鉴权密钥
 

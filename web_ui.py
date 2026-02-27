@@ -4,7 +4,7 @@ import time
 import hashlib
 import asyncio
 from loguru import logger
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Depends, status
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Depends, status, BackgroundTasks
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -123,7 +123,7 @@ async def index(request: Request):
 @limiter.limit("60/minute")
 async def upload_file_async(
     request: Request,
-    background_tasks: asyncio.BackgroundTasks,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     api_key: str = Depends(get_api_key)
 ):
@@ -151,9 +151,11 @@ async def upload_file_async(
         return ResponseModel.error(message=f"上传失败：{str(e)}")
 
 
-@app.get(f"/api/{API_VERSION}/task/{task_id}")
+@app.get("/api/{api_version}/task/{task_id}")
 @limiter.limit("120/minute")
 async def get_task_status(
+    request: Request,
+    api_version: str,
     task_id: str,
     api_key: str = Depends(get_api_key)
 ):
@@ -166,6 +168,7 @@ async def get_task_status(
 @app.post(f"/api/{API_VERSION}/search")
 @limiter.limit("60/minute")
 async def search(
+    request: Request,
     query: str = Form(...),
     top_k: int = Form(5),
     file_type_filter: str = Form(None),
@@ -187,6 +190,7 @@ async def search(
 @app.post(f"/api/{API_VERSION}/delete")
 @limiter.limit("30/minute")
 async def delete_file(
+    request: Request,
     file_path: str = Form(...),
     api_key: str = Depends(get_api_key)
 ):
@@ -205,6 +209,7 @@ async def delete_file(
 @app.post(f"/api/{API_VERSION}/batch_delete")
 @limiter.limit("10/minute")
 async def batch_delete(
+    request: Request,
     file_paths: list = Form(...),
     api_key: str = Depends(get_api_key)
 ):
@@ -223,6 +228,7 @@ async def batch_delete(
 @app.post(f"/api/{API_VERSION}/clear")
 @limiter.limit("5/minute")
 async def clear_all(
+    request: Request,
     api_key: str = Depends(get_api_key)
 ):
     """清空知识库"""
@@ -240,6 +246,7 @@ async def clear_all(
 @app.get(f"/api/{API_VERSION}/stats")
 @limiter.limit("30/minute")
 async def get_stats(
+    request: Request,
     api_key: str = Depends(get_api_key)
 ):
     """获取统计信息"""
@@ -254,6 +261,7 @@ async def get_stats(
 @app.post(f"/api/{API_VERSION}/batch_upload")
 @limiter.limit("10/minute")
 async def batch_upload(
+    request: Request,
     files: list[UploadFile] = File(...),
     api_key: str = Depends(get_api_key)
 ):
@@ -287,6 +295,7 @@ async def batch_upload(
 @app.post(f"/api/{API_VERSION}/batch_search")
 @limiter.limit("30/minute")
 async def batch_search(
+    request: Request,
     queries: list[str] = Form(...),
     top_k: int = Form(5),
     file_type_filter: str = Form(None),
