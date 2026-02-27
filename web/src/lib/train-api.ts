@@ -1,4 +1,4 @@
-// Training API client - proxies through FastAPI to Flask service
+// Training API client - calls FastAPI training endpoints
 
 export interface TrainingData {
   id: string;
@@ -17,18 +17,19 @@ export interface TrainingStatus {
 }
 
 export interface TrainedModel {
-  name: string;
+  version: string;
   path: string;
-  created: string;
+  valid: boolean;
+  deployed: boolean;
 }
 
-// Proxy through FastAPI
+// FastAPI training endpoints
 const PROXY_BASE = '/api/v1/train';
 
 export async function uploadTrainingData(file: File): Promise<any> {
   const formData = new FormData();
   formData.append('file', file);
-  const response = await fetch(`${PROXY_BASE}/data/upload`, {
+  const response = await fetch(`${PROXY_BASE}/upload`, {
     method: 'POST',
     body: formData,
   });
@@ -45,7 +46,7 @@ export async function cleanTrainingData(
   fileId: string,
   config: { min_length?: number; max_length?: number; balance_samples?: boolean }
 ): Promise<any> {
-  const response = await fetch(`${PROXY_BASE}/data/clean`, {
+  const response = await fetch(`${PROXY_BASE}/clean`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ file_id: fileId, ...config }),
@@ -57,7 +58,7 @@ export async function augmentTrainingData(
   fileId: string,
   method: string
 ): Promise<any> {
-  const response = await fetch(`${PROXY_BASE}/data/augment`, {
+  const response = await fetch(`${PROXY_BASE}/augment`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ file_id: fileId, method }),
@@ -66,7 +67,7 @@ export async function augmentTrainingData(
 }
 
 export async function startTraining(config: {
-  data_file: string;
+  file_id: string;
   base_model: string;
   epochs: number;
   batch_size: number;
@@ -82,7 +83,8 @@ export async function startTraining(config: {
 
 export async function getTrainingStatus(): Promise<TrainingStatus> {
   const response = await fetch(`${PROXY_BASE}/status`);
-  return response.json();
+  const data = await response.json();
+  return data.data || { running: false, progress: 0, logs: [], model_path: null };
 }
 
 export async function stopTraining(): Promise<any> {
@@ -93,7 +95,7 @@ export async function stopTraining(): Promise<any> {
 }
 
 export async function getTrainedModels(): Promise<TrainedModel[]> {
-  const response = await fetch(`${PROXY_BASE}/models`);
+  const response = await fetch(`${PROXY_BASE}/models/list`);
   const data = await response.json();
   return data.data || [];
 }
@@ -102,7 +104,19 @@ export async function deployModel(modelPath: string): Promise<any> {
   const response = await fetch(`${PROXY_BASE}/deploy`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model_path: modelPath }),
+    body: JSON.stringify({ version: modelPath }),
   });
   return response.json();
+}
+
+export async function getAvailableModels(): Promise<any[]> {
+  const response = await fetch(`${PROXY_BASE}/models`);
+  const data = await response.json();
+  return data.data || [];
+}
+
+export async function getDefaultConfig(): Promise<any> {
+  const response = await fetch(`${PROXY_BASE}/config`);
+  const data = await response.json();
+  return data.data;
 }
