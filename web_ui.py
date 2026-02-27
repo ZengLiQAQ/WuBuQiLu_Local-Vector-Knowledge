@@ -1228,6 +1228,56 @@ async def validate_trained_model(
         return ResponseModel.error(message=f"验证失败：{str(e)}")
 
 
+@app.get(f"/api/{API_VERSION}/train/export")
+@limiter.limit("10/minute")
+async def export_knowledge_base_for_training(
+    request: Request,
+    api_key: str = Depends(require_permission("train_data"))
+):
+    """从知识库导出训练数据"""
+    try:
+        # 获取所有文档
+        all_docs = kb.collection.get()
+
+        if not all_docs["documents"]:
+            return ResponseModel.error(message="知识库为空")
+
+        # 转换为训练格式 (text1, text2, score)
+        records = []
+        texts = [doc for doc in all_docs["documents"] if doc]
+
+        for i, text in enumerate(texts):
+            # 将长文本分割成训练对
+            if len(text) > 256:
+                text1 = text[:256]
+                text2 = text[256:512] if len(text) > 256 else text
+            else:
+                text1 = text
+                text2 = text
+            records.append({
+                "text1": text1,
+                "text2": text2,
+                "score": 1.0
+            })
+
+        df = pd.DataFrame(records)
+
+        import io
+        output = io.StringIO()
+        df.to_csv(output, index=False)
+
+        from fastapi.responses import Response
+        return Response(
+            content=output.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=kb_training_data.csv"}
+        )
+
+    except Exception as e:
+        logger.error(f"导出失败：{e}")
+        return ResponseModel.error(message=f"导出失败：{str(e)}")
+
+
 # ========== 启动服务 ==========
 if __name__ == "__main__":
     import uvicorn

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Upload, FileText, Trash2, RefreshCw, Sparkles } from 'lucide-react';
 import { uploadTrainingData, getTrainingDataList, cleanTrainingData, augmentTrainingData } from '@/lib/train-api';
+import { KbExporter } from '@/components/train/KbExporter';
 
 interface TrainingDataItem {
   id: string;
@@ -126,6 +127,16 @@ export default function TrainDataPage() {
           <p className="text-sm text-muted-foreground mt-2">
             支持 CSV 或 TXT 格式，CSV需包含 text1, text2, score 列
           </p>
+        </CardContent>
+      </Card>
+
+      {/* 知识库导出 */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>从知识库导出</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <KbExporter />
         </CardContent>
       </Card>
 
